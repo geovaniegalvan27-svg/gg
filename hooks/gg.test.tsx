@@ -121,3 +121,39 @@ test('si Claude todavía no escribió nada después de tu mensaje, lee la respue
   expect(leidos).toEqual(['Respuesta anterior.'])
   await ui.unmount()
 })
+
+test('tu mensaje cuenta aunque la app le ponga notas automáticas adelante', async ($, on) => {
+  const store: Record<string, unknown> = {
+    chats: CHATS, aviso: null, lector: null, isMuted: false, parpadeo: false, isHidden: false,
+    velocidad: 1, voces: [], voz: '', isEligiendoVoz: false,
+  }
+  let version = 1
+  on('clock.now', () => ({ value: 1_000 }))
+  on('state.get', (_, e) => ({ value: { value: store[e.key], version } }))
+  on('state.set', (_, e) => {
+    store[e.key] = (e as unknown as { value: unknown }).value
+    return { value: { isSet: true, version: ++version } }
+  })
+  on('ui.scroll', () => ({ value: {} }))
+  on('session.messages', () => ({
+    value: [
+      { role: 'user', text: 'pregunta vieja', toolUses: [] },
+      { role: 'assistant', text: 'Respuesta vieja de arriba.', toolUses: [] },
+      { role: 'user', text: '<system-reminder>\nnota de la app\n</system-reminder>\nPorque me aparece en rojo?', toolUses: [] },
+      { role: 'assistant', text: 'No falta nada roto.', toolUses: [] },
+      { role: 'user', text: '<task-notification>listo</task-notification>', toolUses: [] },
+      { role: 'assistant', text: 'Te dejo las preguntas.', toolUses: [] },
+    ],
+  }))
+  const leidos: string[] = []
+  on('process.run', (_, e) => {
+    if (e.argv[0] === '/usr/bin/say' && e.argv[2] !== '?') leidos.push(e.argv[e.argv.length - 1])
+    return { value: { exitCode: 0, stdout: '', stderr: '' } }
+  })
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  await ui.press({ key: 'leer' })
+  for (let i = 0; i < 50 && store.lector !== null; i++) await new Promise(r => setTimeout(r, 5))
+  expect(leidos).toEqual(['No falta nada roto.', 'Te dejo las preguntas.'])
+  await ui.unmount()
+})

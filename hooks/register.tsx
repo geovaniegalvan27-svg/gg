@@ -106,9 +106,14 @@ async function bloquesDesdeTuMensaje($: Engine): Promise<string[]> {
   const msgs = await $.session.messages()
   // Tool results, automatic notices ("<...") and the "[Image: ...]" note that comes
   // with a picture are not messages from you.
+  // The app often puts automatic notes (<system-reminder>…</…>) at the start of your message:
+  // they are taken out first, and what is left decides.
   const esTuyo = (i: number) => {
     const m = msgs[i]
-    return m.role === 'user' && !(m.toolResults?.length) && !/^\s*[<[]/.test(m.text)
+    if (m.role !== 'user' || m.toolResults?.length) return false
+    if (m.text.trim() === '') return true // a picture on its own
+    const limpio = m.text.replace(/<([a-zA-Z][\w-]*)[^>]*>[\s\S]*?<\/\1>/g, '').trim()
+    return limpio !== '' && !/^\[Image\b/.test(limpio)
   }
   const tuyos: number[] = []
   for (let i = 0; i < msgs.length; i++) if (esTuyo(i)) tuyos.push(i)
