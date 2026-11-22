@@ -381,14 +381,17 @@ export const register: Register = on => {
         {ordenados.map(c => {
           const isMine = c.cliId === myCliId
           // Finished unseen: a soft, see-through green pill that blinks.
-          const fondo = c.isUnseen
-            ? {
-                borderStyle: 'round',
-                borderColor: blink ? '#7ee2a055' : '#7ee2a022',
-                backgroundColor: blink ? '#7ee2a02e' : '#7ee2a012',
-                padding: 0,
-              }
-            : {}
+          // Every tab is the same soft pill, so the hover and the green blink share one shape:
+          // invisible at rest, a light gray pill under the mouse, a blinking green pill when it finished.
+          const fondo = {
+            borderStyle: 'round',
+            padding: 0,
+            borderColor: c.isUnseen ? (blink ? '#7ee2a055' : '#7ee2a022') : '#00000000',
+            backgroundColor: c.isUnseen ? (blink ? '#7ee2a02e' : '#7ee2a012') : '#00000000',
+            hover: c.isUnseen
+              ? { borderColor: '#7ee2a077', backgroundColor: '#7ee2a038' }
+              : { borderColor: '#ffffff22', backgroundColor: '#ffffff12' },
+          }
           return (
             <Box key={c.id} flexDirection="row" alignItems="center" {...fondo}>
               {c.needsYou ? (
