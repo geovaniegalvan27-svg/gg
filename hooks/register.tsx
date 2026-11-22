@@ -22,6 +22,9 @@ const lector = atom({ plugin: 'gg', key: 'lector' } as const, null as Lector | n
 const isMuted = atom({ plugin: 'gg', key: 'isMuted' } as const, false)
 const parpadeo = atom({ plugin: 'gg', key: 'parpadeo' } as const, false)
 const velocidad = atom({ plugin: 'gg', key: 'velocidad' } as const, 1)
+const voces = atom({ plugin: 'gg', key: 'voces' } as const, [] as readonly string[])
+const voz = atom({ plugin: 'gg', key: 'voz' } as const, '')
+const isEligiendoVoz = atom({ plugin: 'gg', key: 'isEligiendoVoz' } as const, false)
 
 /** Most tabs shown. */
 const MAX = 10
@@ -116,28 +119,45 @@ async function bloquesDesdeTuMensaje($: Engine): Promise<string[]> {
 const sonido = ($: Engine, ...args: string[]) =>
   $.process.run(['/bin/sh', `${$.plugin.root}/bin/hablar.sh`, ...args]).catch(() => undefined)
 
-/**
- * Picks the voice: the one in the settings, else the best installed voice for the
- * language (Premium, then Enhanced, then any), else the system voice.
- */
-async function elegirVoz($: Engine): Promise<string | null> {
-  if (ajustes.voz) return ajustes.voz
+/** The installed voices for the settings language, best first (Premium, Enhanced, then the rest). */
+async function listarVoces($: Engine): Promise<string[]> {
   const r = await $.process.run(['/usr/bin/say', '-v', '?']).catch(() => null)
-  if (!r) return null
-  const voces = r.stdout
+  if (!r) return []
+  const lista = r.stdout
     .split('\n')
     .map(l => /^(.*?)\s+([a-z]{2,3}_[A-Za-z0-9]+)\s+#/.exec(l))
     .filter((m): m is RegExpExecArray => m !== null && m[2].toLowerCase().startsWith(ajustes.idioma.toLowerCase()))
     .map(m => m[1].trim())
-  const mejor =
-    voces.find(v => /premium/i.test(v)) ??
-    voces.find(v => /enhanced|mejorada/i.test(v)) ??
-    voces.find(v => /^(paulina|m[oó]nica|marisol|isabela|diego|jorge)\b/i.test(v)) ??
-    voces[0]
-  return mejor ?? null
+  const nivel = (v: string) => (/premium/i.test(v) ? 0 : /enhanced|mejorada/i.test(v) ? 1 : 2)
+  return [...new Set(lista)].sort((a, b) => nivel(a) - nivel(b))
 }
 
-let vozElegida: string | null = null
+/** Saves the chosen voice in ~/.claude/gg.json, keeping the rest of the settings. */
+async function guardarVoz($: Engine, nombre: string) {
+  const home = await $.env.get('HOME')
+  if (home === undefined) return
+  const ruta = `${home}/.claude/gg.json`
+  let d: Record<string, unknown> = {}
+  try {
+    d = JSON.parse((await $.fs.read(ruta)) as string)
+  } catch {
+    // no settings file yet
+  }
+  d.voz = nombre
+  await $.fs.write(ruta, `${JSON.stringify(d, null, 2)}\n`)
+}
+
+/** Picks a voice from the list: it plays a short sample and is remembered. */
+async function elegirVoz($: Engine, nombre: string) {
+  await update($, voz, () => nombre)
+  await update($, isEligiendoVoz, () => false)
+  ajustes.voz = nombre
+  await guardarVoz($, nombre).catch(() => undefined)
+  await sonido($, 'callar')
+  const corto = nombre.replace(/\s*\(.*$/, '')
+  void $.process.run(['/usr/bin/say', '-v', nombre, `Hola, soy ${corto}. Así te voy a leer.`]).catch(() => undefined)
+}
+
 /** Every new reading bumps this; one left behind does not carry on by itself. */
 let turno = 0
 
@@ -153,9 +173,10 @@ async function leerBloque($: Engine, i: number, isPress: boolean): Promise<void>
   await update($, lector, () => ({ bloques: actual.bloques, idx: i }))
   if (isPress) await $.ui.scroll({ to: { key: MARCA }, block: 'center' }).catch(() => undefined)
   const rate = String(Math.round(PALABRAS_POR_MINUTO * (await read($, velocidad))))
-  const voz = vozElegida ? ['-v', vozElegida] : []
+  const elegida = await read($, voz)
+  const conVoz = elegida ? ['-v', elegida] : []
   await $.process
-    .run(['/usr/bin/say', ...voz, '-r', rate, paraLeer(actual.bloques[i])], { timeoutMs: 600_000 })
+    .run(['/usr/bin/say', ...conVoz, '-r', rate, paraLeer(actual.bloques[i])], { timeoutMs: 600_000 })
     .catch(() => undefined)
   if (mio === turno) await leerBloque($, i + 1, false)
 }
@@ -219,7 +240,10 @@ export const register: Register = on => {
     await update($, lector, () => null)
     await update($, aviso, () => null)
     await leerAjustes($)
-    vozElegida = await elegirVoz($)
+    const lista = await listarVoces($)
+    await update($, voces, () => lista)
+    await update($, voz, () => ajustes.voz ?? lista[0] ?? '')
+    await update($, isEligiendoVoz, () => false)
     await refresh($, myCliId, mem).catch(() => undefined)
     $.clock.every(EVERY_MS, () => refresh($, myCliId, mem).catch(() => undefined))
     $.clock.every(700, async () => {
@@ -262,6 +286,9 @@ export const register: Register = on => {
     const muted = await read($, isMuted)
     const blink = await read($, parpadeo)
     const speed = await read($, velocidad)
+    const listaVoces = await read($, voces)
+    const vozActual = await read($, voz)
+    const eligiendo = await read($, isEligiendoVoz)
     // For 5 s after a chat finishes, the bell swings.
     const sonando = !muted && nota !== null && now - nota.at < 5_000
     const working = list.some(c => c.isWorking && c.cliId !== myCliId)
@@ -270,7 +297,7 @@ export const register: Register = on => {
     const enUso = (c: Chat) => c.cliId === myCliId || c.isWorking || c.isUnseen || c.needsYou
     const ordenados = [...list.filter(enUso), ...list.filter(c => !enUso(c))]
 
-    const { Box, Button, Svg, Text } = $.ui.resolve(e)
+    const { Box, Button, Select, Svg, Text } = $.ui.resolve(e)
     return (
       <Box flexDirection="row" flexWrap="wrap" alignItems="center" columnGap={1} rowGap={0}>
         <Svg source={nube(color, leyendo ? 1.2 : 3.5)} alt="nubecita" isInteractive width={26} height={16} />
@@ -297,6 +324,20 @@ export const register: Register = on => {
         <Button key="velocidad" plain dimColor onPress={() => cambiarVelocidad($)}>
           {`${speed}x`}
         </Button>
+        {eligiendo && listaVoces.length > 0 ? (
+          <Select
+            key="voz"
+            label="Voz"
+            autoFocus
+            value={vozActual}
+            options={listaVoces.map(v => ({ value: v, label: v }))}
+            onSelect={v => void elegirVoz($, v)}
+          />
+        ) : (
+          <Button key="elegir-voz" plain dimColor onPress={() => update($, isEligiendoVoz, v => !v)}>
+            🗣
+          </Button>
+        )}
         {sonando ? (
           <Svg source={campana()} alt="bell ringing" isInteractive width={18} height={18} />
         ) : (

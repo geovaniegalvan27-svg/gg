@@ -54,7 +54,7 @@ test('en la terminal no dibuja nada propio', async ($, on) => {
 
 test('🔊 leer lee bloque por bloque desde tu último mensaje, y ⏭ salta', async ($, on) => {
   const store: Record<string, unknown> = {
-    chats: CHATS, aviso: null, lector: null, isMuted: false, parpadeo: false, isHidden: false, velocidad: 1,
+    chats: CHATS, aviso: null, lector: null, isMuted: false, parpadeo: false, isHidden: false, velocidad: 1, voces: [], voz: '', isEligiendoVoz: false,
   }
   let version = 1
   on('clock.now', () => ({ value: 1_000 }))
@@ -91,7 +91,7 @@ test('🔊 leer lee bloque por bloque desde tu último mensaje, y ⏭ salta', as
 
 test('si Claude todavía no escribió nada después de tu mensaje, lee la respuesta anterior', async ($, on) => {
   const store: Record<string, unknown> = {
-    chats: CHATS, aviso: null, lector: null, isMuted: false, parpadeo: false, isHidden: false, velocidad: 1,
+    chats: CHATS, aviso: null, lector: null, isMuted: false, parpadeo: false, isHidden: false, velocidad: 1, voces: [], voz: '', isEligiendoVoz: false,
   }
   let version = 1
   on('clock.now', () => ({ value: 1_000 }))

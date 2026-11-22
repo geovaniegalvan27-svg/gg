@@ -32,6 +32,9 @@ declare module 'claude-code' {
       isMuted: boolean
       parpadeo: boolean
       velocidad: number
+      voces: readonly string[]
+      voz: string
+      isEligiendoVoz: boolean
     }
   }
 }
