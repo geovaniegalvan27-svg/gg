@@ -381,24 +381,24 @@ export const register: Register = on => {
         {ordenados.map(c => {
           const isMine = c.cliId === myCliId
           // Finished unseen: a soft, see-through green pill that blinks.
-          // Every tab is the same soft pill, so the hover and the green blink share one shape:
-          // invisible at rest, a light gray pill under the mouse, a blinking green pill when it finished.
-          const fondo = {
-            borderStyle: 'round',
-            padding: 0,
-            borderColor: c.isUnseen ? (blink ? '#7ee2a055' : '#7ee2a022') : '#00000000',
-            backgroundColor: c.isUnseen ? (blink ? '#7ee2a02e' : '#7ee2a012') : '#00000000',
-            hover: c.isUnseen
-              ? { borderColor: '#7ee2a077', backgroundColor: '#7ee2a038' }
-              : { borderColor: '#ffffff22', backgroundColor: '#ffffff12' },
-          }
+          // Finished unseen: a soft green pill hugging just the button, so the app's own gray
+          // hover sits exactly on it.
+          const fondo = c.isUnseen
+            ? {
+                borderStyle: 'round',
+                padding: 0,
+                borderColor: blink ? '#7ee2a055' : '#7ee2a022',
+                backgroundColor: blink ? '#7ee2a02e' : '#7ee2a012',
+              }
+            : {}
           return (
-            <Box key={c.id} flexDirection="row" alignItems="center" {...fondo}>
+            <Box key={c.id} flexDirection="row" alignItems="center">
               {c.needsYou ? (
                 <Svg source={punto(true, '#f85149')} alt="needs you" isInteractive width={8} height={8} />
               ) : isMine || c.isWorking ? (
                 <Svg source={punto(c.isWorking)} alt={c.isWorking ? 'working' : 'this chat'} isInteractive width={7} height={7} />
               ) : null}
+              <Box flexDirection="row" alignItems="center" {...fondo}>
               <Button
                 key={c.id}
                 plain
@@ -411,6 +411,7 @@ export const register: Register = on => {
               >
                 {enUso(c) ? `${c.emoji} ${c.name}` : `${c.emoji}${c.name.match(/ (\d+)$/)?.[1] ?? ''}`}
               </Button>
+              </Box>
               {isMine ? (
                 <Button
                   key="separar"
