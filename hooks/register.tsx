@@ -417,11 +417,21 @@ export const register: Register = on => {
                   key="separar"
                   plain
                   dimColor
-                  onPress={() =>
-                    $.tool
+                  onPress={async () => {
+                    // Pops this chat out, then puts the new window on the half of the screen
+                    // the main window is not using, full height.
+                    const ventanas = `${$.plugin.root}/bin/ventanas.sh`
+                    const antes = await $.process.run(['/bin/sh', ventanas, 'nombres']).catch(() => null)
+                    const ok = await $.tool
                       .call({ tool: 'mcp__ccd_window__open_session_in', session_id: 'self', target: 'window' })
-                      .catch(() => $.ui.toast('Could not pop this chat out'))
-                  }
+                      .then(() => true)
+                      .catch(() => false)
+                    if (!ok) {
+                      $.ui.toast('Could not pop this chat out')
+                      return
+                    }
+                    if (antes) await $.process.run(['/bin/sh', ventanas, 'acomodar', antes.stdout.trim()]).catch(() => undefined)
+                  }}
                 >
                   ⧉
                 </Button>
