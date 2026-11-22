@@ -300,14 +300,14 @@ export const register: Register = on => {
     return started
   })
 
-  on('command.run', async ($, e, next) => {
-    if (e.name === 'leer') {
-      await empezar($)
-      return { text: 'Reading since your last message.' }
-    }
-    if (e.name !== 'gg') return next(e)
+  on('command.run', { command: 'leer' }, async $ => {
+    await empezar($)
+    return { text: 'Leyendo desde tu último mensaje.' }
+  })
+
+  on('command.run', { command: 'gg' }, async $ => {
     const hidden = await update($, isHidden, v => !v)
-    return { text: hidden ? 'GG hidden. /gg to show it again.' : 'GG visible.' }
+    return { text: hidden ? 'GG oculta. /gg para volver a verla.' : 'GG visible.' }
   })
 
   // The block being read gets a soft green outline in the chat.
