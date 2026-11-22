@@ -59,8 +59,15 @@ const TEMAS_BASE: readonly Tema[] = [
 ]
 
 /** Settings read from ~/.claude/gg.json; every field optional. */
-type Ajustes = { voz: string | null; idioma: string; temas: Tema[] }
-const ajustes: Ajustes = { voz: null, idioma: 'es', temas: [] }
+type Ajustes = { voz: string | null; idioma: string; temas: Tema[]; kokoro: string | null }
+const ajustes: Ajustes = { voz: null, idioma: 'es', temas: [], kokoro: null }
+
+/** Kokoro voices offered when a Kokoro server is set and answering: label -> voice id. */
+const VOCES_KOKORO: Record<string, string> = {
+  'Kokoro · Dora (mujer)': 'ef_dora',
+  'Kokoro · Alex (hombre)': 'em_alex',
+  'Kokoro · Santa (hombre)': 'em_santa',
+}
 
 function describe(title: string): { emoji: string; name: string } {
   const topic = title.includes('·') ? title.split('·')[0].trim() : ''
@@ -129,7 +136,29 @@ async function listarVoces($: Engine): Promise<string[]> {
     .filter((m): m is RegExpExecArray => m !== null && m[2].toLowerCase().startsWith(ajustes.idioma.toLowerCase()))
     .map(m => m[1].trim())
   const nivel = (v: string) => (/premium/i.test(v) ? 0 : /enhanced|mejorada/i.test(v) ? 1 : 2)
-  return [...new Set(lista)].sort((a, b) => nivel(a) - nivel(b))
+  const mac = [...new Set(lista)].sort((a, b) => nivel(a) - nivel(b))
+  const kokoro =
+    ajustes.kokoro !== null &&
+    (await $.process.run(['/usr/bin/curl', '-s', '-m', '2', `${ajustes.kokoro.replace(/\/$/, '')}/estado`]).catch(() => null))
+      ?.exitCode === 0
+  return [...(kokoro ? Object.keys(VOCES_KOKORO) : []), ...mac]
+}
+
+/** Says `texto` with the chosen voice at the chosen speed; resolves when it is done. */
+async function decir($: Engine, nombre: string, texto: string, speed: number) {
+  const id = VOCES_KOKORO[nombre]
+  if (id !== undefined && ajustes.kokoro !== null) {
+    await $.process
+      .run(['/usr/bin/python3', `${$.plugin.root}/bin/kokoro.py`, ajustes.kokoro, id, String(speed), texto], {
+        timeoutMs: 600_000,
+      })
+      .catch(() => undefined)
+    return
+  }
+  const rate = String(Math.round(PALABRAS_POR_MINUTO * speed))
+  await $.process
+    .run(['/usr/bin/say', ...(nombre ? ['-v', nombre] : []), '-r', rate, texto], { timeoutMs: 600_000 })
+    .catch(() => undefined)
 }
 
 /** Saves the chosen voice in ~/.claude/gg.json, keeping the rest of the settings. */
@@ -154,8 +183,8 @@ async function elegirVoz($: Engine, nombre: string) {
   ajustes.voz = nombre
   await guardarVoz($, nombre).catch(() => undefined)
   await sonido($, 'callar')
-  const corto = nombre.replace(/\s*\(.*$/, '')
-  void $.process.run(['/usr/bin/say', '-v', nombre, `Hola, soy ${corto}. Así te voy a leer.`]).catch(() => undefined)
+  const corto = nombre.replace(/^Kokoro · /, '').replace(/\s*\(.*$/, '')
+  void decir($, nombre, `Hola, soy ${corto}. Así te voy a leer.`, await read($, velocidad))
 }
 
 /** Every new reading bumps this; one left behind does not carry on by itself. */
@@ -172,12 +201,7 @@ async function leerBloque($: Engine, i: number, isPress: boolean): Promise<void>
   await sonido($, 'callar')
   await update($, lector, () => ({ bloques: actual.bloques, idx: i }))
   if (isPress) await $.ui.scroll({ to: { key: MARCA }, block: 'center' }).catch(() => undefined)
-  const rate = String(Math.round(PALABRAS_POR_MINUTO * (await read($, velocidad))))
-  const elegida = await read($, voz)
-  const conVoz = elegida ? ['-v', elegida] : []
-  await $.process
-    .run(['/usr/bin/say', ...conVoz, '-r', rate, paraLeer(actual.bloques[i])], { timeoutMs: 600_000 })
-    .catch(() => undefined)
+  await decir($, await read($, voz), paraLeer(actual.bloques[i]), await read($, velocidad))
   if (mio === turno) await leerBloque($, i + 1, false)
 }
 
@@ -218,6 +242,7 @@ async function leerAjustes($: Engine) {
     const d = JSON.parse((await $.fs.read(`${home}/.claude/gg.json`)) as string)
     ajustes.voz = typeof d.voz === 'string' ? d.voz : null
     ajustes.idioma = typeof d.idioma === 'string' ? d.idioma : 'es'
+    ajustes.kokoro = typeof d.kokoro === 'string' ? d.kokoro : null
     ajustes.temas = (Array.isArray(d.temas) ? d.temas : [])
       .filter((t: { buscar?: unknown }) => typeof t.buscar === 'string')
       .map((t: { buscar: string; emoji?: string; nombre?: string }) => ({

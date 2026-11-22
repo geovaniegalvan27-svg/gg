@@ -8,6 +8,8 @@ if [ "$1" = "tirin" ]; then
 fi
 if [ "$1" = "callar" ]; then
   pkill -f "^/usr/bin/say -v " >/dev/null 2>&1
+  pkill -f "/bin/kokoro.py " >/dev/null 2>&1
+  pkill -f "afplay .*pulpo-" >/dev/null 2>&1
   exit 0
 fi
 exit 0

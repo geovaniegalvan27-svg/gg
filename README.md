@@ -75,6 +75,8 @@ Create `~/.claude/gg.json`:
 
 - `idioma`: language code used to pick a voice (`es`, `en`, `pt`…). Default `es`.
 - `voz`: an exact voice name from `say -v '?'`, to skip the automatic pick.
+- `kokoro`: URL of a local [Kokoro](https://github.com/hexgrad/kokoro) TTS server with a `POST /wav`
+  endpoint; when it answers, its natural Spanish voices show up first in 🗣.
 - `temas`: your own topics, checked before the built-in ones. `buscar` is a regular expression
   matched against the chat title.
 
