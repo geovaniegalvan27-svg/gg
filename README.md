@@ -9,13 +9,13 @@ suave cuando uno termina, un puntito rojo cuando uno te necesita, y lectura en v
 voces de la Mac. Sin internet ni tokens.*
 
 ```
- (••)  🔊  1x 🗣 🔔   • 🧩 Mods ⧉   • 🌐 Web   • 🐞 Bug   (📈 Trading)   📄
+ (••)  🔊  1x  🔔   • 🧩 Mods ⧉   • 🌐 Web   • 🐞 Bug   (📈 Trading)   📄
   │     │   │   │    │             │          │           └ finished while you were away: soft green pill blinks
   │     │   │   │    │             │          └ needs your answer or approval: the dot blinks red
   │     │   │   │    │             └ working: the green dot blinks
   │     │   │   │    └ the chat you are in (⧉ pops it out into its own window)
   │     │   │   └ chime on/off — the bell swings when a chat finishes
-  │     │   └ reading speed: 1x · 1.5x · 2x, and 🗣 to pick the voice
+  │     │   └ reading speed: 1x · 1.5x · 2x
   │     └ read aloud — becomes ⏮ 2/7 ⏭ ⏹ while reading
   └ the cloud breathes; gray idle · violet others working · blue a chat finished · orange reading
 ```
@@ -51,8 +51,8 @@ Requires macOS and the Claude desktop app's Code tab.
 
 ## Nicer voices (free)
 
-Press 🗣 to pick any installed voice for your language (you hear a short sample and it is
-remembered). By default GG picks the best one: **Premium**, then **Enhanced**, then any. The voices macOS ships by default sound robotic; the good ones are a free download:
+GG picks the best installed voice for your language: **Premium**, then **Enhanced**, then any
+(or the one set as `voz` in the settings). The voices macOS ships by default sound robotic; the good ones are a free download:
 
 **System Settings → Accessibility → Spoken Content → System voice → Manage Voices…**, pick your
 language and download a voice marked *Premium* or *Enhanced* (for Spanish, for example
@@ -76,7 +76,8 @@ Create `~/.claude/gg.json`:
 - `idioma`: language code used to pick a voice (`es`, `en`, `pt`…). Default `es`.
 - `voz`: an exact voice name from `say -v '?'`, to skip the automatic pick.
 - `kokoro`: URL of a local [Kokoro](https://github.com/hexgrad/kokoro) TTS server with a `POST /wav`
-  endpoint; when it answers, its natural Spanish voices show up first in 🗣.
+  endpoint; when it answers, its natural voices are used, with the whole reading made ahead so it flows. Set `voz` to
+  `Kokoro · Dora (mujer)`, `Kokoro · Alex (hombre)` or `Kokoro · Santa (hombre)`.
 - `temas`: your own topics, checked before the built-in ones. `buscar` is a regular expression
   matched against the chat title.
 

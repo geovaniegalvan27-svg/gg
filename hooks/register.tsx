@@ -201,7 +201,27 @@ async function leerBloque($: Engine, i: number, isPress: boolean): Promise<void>
   await sonido($, 'callar')
   await update($, lector, () => ({ bloques: actual.bloques, idx: i }))
   if (isPress) await $.ui.scroll({ to: { key: MARCA }, block: 'center' }).catch(() => undefined)
-  await decir($, await read($, voz), paraLeer(actual.bloques[i]), await read($, velocidad))
+  const nombre = await read($, voz)
+  const speed = await read($, velocidad)
+  const id = VOCES_KOKORO[nombre]
+  if (id !== undefined && ajustes.kokoro !== null) {
+    // Kokoro: one process reads from block i to the end, making each next sentence while the
+    // current one plays (no pause between blocks), and says which block it is on.
+    const lectura = $.process.spawn({
+      argv: ['/usr/bin/python3', `${$.plugin.root}/bin/kokoro.py`, ajustes.kokoro, id, String(speed), String(i)],
+      input: JSON.stringify(actual.bloques.map(paraLeer)),
+    })
+    for await (const { text } of lectura) {
+      if (mio !== turno) break
+      for (const m of text.matchAll(/BLOQUE (\d+)/g)) {
+        const n = Number(m[1])
+        await update($, lector, l => (l === null ? l : { bloques: l.bloques, idx: n }))
+      }
+    }
+    if (mio === turno) await parar($)
+    return
+  }
+  await decir($, nombre, paraLeer(actual.bloques[i]), speed)
   if (mio === turno) await leerBloque($, i + 1, false)
 }
 
@@ -311,9 +331,6 @@ export const register: Register = on => {
     const muted = await read($, isMuted)
     const blink = await read($, parpadeo)
     const speed = await read($, velocidad)
-    const listaVoces = await read($, voces)
-    const vozActual = await read($, voz)
-    const eligiendo = await read($, isEligiendoVoz)
     // For 5 s after a chat finishes, the bell swings.
     const sonando = !muted && nota !== null && now - nota.at < 5_000
     const working = list.some(c => c.isWorking && c.cliId !== myCliId)
@@ -322,7 +339,7 @@ export const register: Register = on => {
     const enUso = (c: Chat) => c.cliId === myCliId || c.isWorking || c.isUnseen || c.needsYou
     const ordenados = [...list.filter(enUso), ...list.filter(c => !enUso(c))]
 
-    const { Box, Button, Select, Svg, Text } = $.ui.resolve(e)
+    const { Box, Button, Svg, Text } = $.ui.resolve(e)
     return (
       <Box flexDirection="row" flexWrap="wrap" alignItems="center" columnGap={1} rowGap={0}>
         <Svg source={nube(color, leyendo ? 1.2 : 3.5)} alt="nubecita" isInteractive width={26} height={16} />
@@ -349,20 +366,6 @@ export const register: Register = on => {
         <Button key="velocidad" plain dimColor onPress={() => cambiarVelocidad($)}>
           {`${speed}x`}
         </Button>
-        {eligiendo && listaVoces.length > 0 ? (
-          <Select
-            key="voz"
-            label="Voz"
-            autoFocus
-            value={vozActual}
-            options={listaVoces.map(v => ({ value: v, label: v }))}
-            onSelect={v => void elegirVoz($, v)}
-          />
-        ) : (
-          <Button key="elegir-voz" plain dimColor onPress={() => update($, isEligiendoVoz, v => !v)}>
-            🗣
-          </Button>
-        )}
         {sonando ? (
           <Svg source={campana()} alt="bell ringing" isInteractive width={18} height={18} />
         ) : (
