@@ -231,7 +231,8 @@ async function leerBloque($: Engine, i: number, isPress: boolean): Promise<void>
 
 /** Wakes the Kokoro server up ahead of time, so 🔊 starts right away. */
 function prenderVoz($: Engine) {
-  if (ajustes.kokoro === null) return
+  // Only when the chosen voice is a Kokoro one: a Mac voice needs nothing running.
+  if (ajustes.kokoro === null || VOCES_KOKORO[ajustes.voz ?? ''] === undefined) return
   void $.process
     .run(['/usr/bin/python3', `${$.plugin.root}/bin/kokoro.py`, ajustes.kokoro, '--prender'], { timeoutMs: 20_000 })
     .catch(() => undefined)

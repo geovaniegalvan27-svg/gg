@@ -1,6 +1,6 @@
 {
   "name": "gg",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "A little cloud above the Claude desktop prompt: tabs for your open chats, a chime when one finishes, a red dot when one needs you, and read-aloud with the Mac's own voices.",
   "license": "MIT",
   "keywords": ["tabs", "sessions", "read-aloud", "voice", "notifications", "desktop"],
