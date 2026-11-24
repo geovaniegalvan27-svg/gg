@@ -142,10 +142,8 @@ async function listarVoces($: Engine): Promise<string[]> {
     .map(m => m[1].trim())
   const nivel = (v: string) => (/premium/i.test(v) ? 0 : /enhanced|mejorada/i.test(v) ? 1 : 2)
   const mac = [...new Set(lista)].sort((a, b) => nivel(a) - nivel(b))
-  const kokoro =
-    ajustes.kokoro !== null &&
-    (await $.process.run(['/usr/bin/curl', '-s', '-m', '2', `${ajustes.kokoro.replace(/\/$/, '')}/estado`]).catch(() => null))
-      ?.exitCode === 0
+  // Kokoro starts on demand (and falls back to the Mac's voice), so its voices are always offered.
+  const kokoro = ajustes.kokoro !== null
   return [...(kokoro ? Object.keys(VOCES_KOKORO) : []), ...mac]
 }
 
@@ -218,6 +216,7 @@ async function leerBloque($: Engine, i: number, isPress: boolean): Promise<void>
     })
     for await (const { text } of lectura) {
       if (mio !== turno) break
+      if (text.includes('PRENDIENDO')) $.ui.toast('Prendiendo la voz… (unos segundos)')
       for (const m of text.matchAll(/BLOQUE (\d+)/g)) {
         const n = Number(m[1])
         await update($, lector, l => (l === null ? l : { bloques: l.bloques, idx: n }))
@@ -228,6 +227,14 @@ async function leerBloque($: Engine, i: number, isPress: boolean): Promise<void>
   }
   await decir($, nombre, paraLeer(actual.bloques[i]), speed)
   if (mio === turno) await leerBloque($, i + 1, false)
+}
+
+/** Wakes the Kokoro server up ahead of time, so 🔊 starts right away. */
+function prenderVoz($: Engine) {
+  if (ajustes.kokoro === null) return
+  void $.process
+    .run(['/usr/bin/python3', `${$.plugin.root}/bin/kokoro.py`, ajustes.kokoro, '--prender'], { timeoutMs: 20_000 })
+    .catch(() => undefined)
 }
 
 async function parar($: Engine) {
@@ -294,6 +301,7 @@ export const register: Register = on => {
     await update($, voces, () => lista)
     await update($, voz, () => ajustes.voz ?? lista[0] ?? '')
     await update($, isEligiendoVoz, () => false)
+    prenderVoz($)
     await refresh($, myCliId, mem).catch(() => undefined)
     $.clock.every(EVERY_MS, () => refresh($, myCliId, mem).catch(() => undefined))
     $.clock.every(700, async () => {
@@ -483,13 +491,29 @@ async function refresh($: Engine, myCliId: string, mem: Memoria) {
   // Each file is ~0.5 MB: only recently touched ones and popped-out windows are read.
   const recent = files.filter(f => now - f.mtimeMs < OPEN_MS || [...loose].some(id => f.path.includes(id)))
 
+  const datos: Record<string, unknown>[] = []
+  for (const f of recent) {
+    try {
+      datos.push(JSON.parse((await $.fs.read(f.path)) as string))
+    } catch {
+      // a half-written file: skipped this round
+    }
+  }
+  // Each time you enter a chat the app stamps it (lastFocusedAt). A chat stays on screen until
+  // you enter another one, so everything it did up to that next stamp you already saw.
+  const enfoques = datos.map(d => Number(d.lastFocusedAt ?? 0)).filter(n => n > 0).sort((a, b) => a - b)
+  const vistoHasta = (focused: number, id: string) => {
+    if (loose.has(id)) return now // a popped-out window is always on screen
+    const siguiente = enfoques.find(n => n > focused)
+    return siguiente === undefined ? now : siguiente
+  }
+
   const found: Chat[] = []
   const finished: Chat[] = []
   let myFocus = 0
   let maxFocus = 0
-  for (const f of recent) {
+  for (const d of datos) {
     try {
-      const d = JSON.parse((await $.fs.read(f.path)) as string)
       if (d.isArchived) continue
       const id = String(d.sessionId)
       const cliId = String(d.cliSessionId ?? '')
@@ -503,9 +527,12 @@ async function refresh($: Engine, myCliId: string, mem: Memoria) {
       const isEndEdge = edge - userAt > 2_000
       const isWorking =
         (!isEndEdge && now - activity < 120_000) || (activity - edge > 5_000 && now - activity < 90_000)
-      const isUnseen = !isWorking && cliId !== myCliId && activity > focused && now - activity < OPEN_MS
+      const isUnseen =
+        !isWorking && cliId !== myCliId && focused > 0 && activity > vistoHasta(focused, id) && now - activity < OPEN_MS
       // Claude stopped and needs you: a question, an approval, a choice.
-      const summary = d.postTurnSummary
+      const summary = d.postTurnSummary as
+        | { status_category?: string; needs_action?: unknown; summarizes_uuid?: unknown }
+        | undefined
       const needsYou =
         !isWorking &&
         !!summary &&
@@ -529,7 +556,7 @@ async function refresh($: Engine, myCliId: string, mem: Memoria) {
       if (!mem.isFirst && key !== '' && before !== key && cliId !== myCliId) finished.push(chat)
       if (isOpen) found.push(chat)
     } catch {
-      // a half-written file: skipped this round
+      // an odd file: skipped this round
     }
   }
   mem.isFirst = false
@@ -560,6 +587,7 @@ async function refresh($: Engine, myCliId: string, mem: Memoria) {
 
   // Only the chat you are looking at chimes, so they don't all ring at once.
   const isLeader = myFocus > 0 && myFocus === maxFocus
+  if (finished.length > 0 && isLeader) prenderVoz($)
   for (const chat of finished) {
     await update($, aviso, () => ({ text: `${chat.emoji} ${chat.name}`, at: now }))
     if (isLeader && !(await read($, isMuted))) await sonido($, 'tirin')

@@ -126,6 +126,7 @@ Create `~/.claude/gg.json`:
 | `idioma` | Language code used to pick a voice (`es`, `en`, `pt`…). Default `es`. |
 | `voz` | Exact voice name from `say -v '?'`, to skip the automatic pick. |
 | `kokoro` | URL of a local [Kokoro](https://github.com/hexgrad/kokoro) TTS server with a `POST /wav` endpoint. When it answers, its natural voices are used and the whole reading is prepared ahead so it flows. Set `voz` to `Kokoro · Dora (mujer)`, `Kokoro · Alex (hombre)` or `Kokoro · Santa (hombre)`. |
+| `kokoroArranque` | Shell command that starts your Kokoro server. If it is off when you press 🔊, GG runs it and waits; any sentence Kokoro can't make is read with the Mac's voice, so reading never goes silent. |
 | `temas` | Your own topics, checked before the built-in ones. `buscar` is a regular expression matched against the chat title. |
 
 ## How it works
@@ -135,7 +136,7 @@ GG is a Claude Code mod (a hooks module). It runs with your user's permissions, 
 - **Reads** the desktop app's own session list under `~/Library/Application Support/Claude/` to know which chats are open, working, finished or waiting for you, and `~/.claude/gg.json` for your settings.
 - **Writes** only `~/.claude/gg.json`, to remember the voice you picked.
 - **Switches chats** with the app's `claude://code/continue?session=…` link — no reload.
-- **Speaks** with macOS's `/usr/bin/say`, or your own local Kokoro server if you configure one.
+- **Speaks** with macOS's `/usr/bin/say`, or your own local Kokoro server if you configure one (and starts it with your `kokoroArranque` command, if set).
 - **⧉ button** uses one AppleScript (`bin/ventanas.sh`) to read the names of Claude's windows and move the popped-out one; macOS asks for Accessibility permission the first time.
 - **Network:** none, except `127.0.0.1` for your own Kokoro server if you set it up.
 
